@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced HO Admin Panel - MR Field Force</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f1f5f9; }
+        .sidebar {
+            position: fixed; left: 0; top: 0; width: 260px; height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; overflow-y: auto; z-index: 100; transition: all 0.3s;
+        }
+        .sidebar-item {
+            padding: 14px 20px; cursor: pointer; transition: all 0.3s;
+            border-left: 4px solid transparent; font-size: 15px;
+        }
+        .sidebar-item:hover, .sidebar-item.active {
+            background: rgba(255,255,255,0.2); border-left-color: white;
+        }
+        .main-content { margin-left: 260px; padding: 24px; min-height: 100vh; }
+        .card {
+            background: white; border-radius: 12px; padding: 20px;
+            margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border-radius: 12px; padding: 20px; text-align: center;
+        }
+        .stat-number { font-size: 36px; font-weight: bold; margin: 10px 0; }
+        .stat-label { font-size: 14px; opacity: 0.9; }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 12px 24px; border-radius: 8px;
+            border: none; font-weight: 600; cursor: pointer; transition: all 0.3s;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .btn-secondary { background: #f1f5f9; color: #475569; padding: 10px 20px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; }
+        .btn-success { background: #10b981; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; }
+        .btn-danger { background: #ef4444; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; }
+        .btn-warning { background: #f59e0b; color: white; padding: 8px 16px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; }
+        .input-field {
+            width: 100%; padding: 12px; border: 2px solid #e2e8f0;
+            border-radius: 8px; margin: 8px 0; font-size: 14px;
+        }
+        .input-field:focus { outline: none; border-color: #667eea; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+        th { background: #f8fafc; font-weight: 600; }
+        tr:hover { background: #f8fafc; }
+        .status-badge {
+            display: inline-block; padding: 6px 12px; border-radius: 20px;
+            font-size: 12px; font-weight: 600;
+        }
+        .status-active { background: #10b981; color: white; }
+        .status-inactive { background: #ef4444; color: white; }
+        .status-hold { background: #f59e0b; color: white; }
+        .status-left { background: #6b7280; color: white; }
+        .status-pending { background: #f59e0b; color: white; }
+        .status-approved { background: #10b981; color: white; }
+        .status-rejected { background: #ef4444; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .notification {
+            position: fixed; top: 20px; right: 20px; padding: 16px 24px;
+            border-radius: 10px; color: white; font-weight: 600;
+            z-index: 1000; animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .notification.success { background: #10b981; }
+        .notification.error { background: #ef4444; }
+        .notification.info { background: #3b82f6; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 1000; padding: 20px; overflow-y: auto;
+        }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .modal-content {
+            background: white; border-radius: 12px; padding: 24px;
+            max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto;
+        }
+        #map { height: 500px; border-radius: 12px; }
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; height: auto; position: relative; }
+            .main-content { margin-left: 0; padding: 16px; }
+            .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="p-6 border-b border-white border-opacity-20">
+            <h2 class="text-2xl font-bold">🏥 HO Admin Panel</h2>
+            <p class="text-sm opacity-90 mt-1" id="adminName">Super Admin</p>
+        </div>
+        
+        <div class="sidebar-item active" onclick="switchTab('dashboard')">📊 Dashboard</div>
+        <div class="sidebar-item" onclick="switchTab('employees')">👥 Employee Management</div>
+        <div class="sidebar-item" onclick="switchTab('hierarchy')">🌳 Hierarchy Setup</div>
+        <div class="sidebar-item" onclick="switchTab('customers')">👨‍⚕️ Customer Approvals</div>
+        <div class="sidebar-item" onclick="switchTab('tours')">🗺️ Tour Plan Approvals</div>
+        <div class="sidebar-item" onclick="switchTab('expenses')">💰 Expense Approvals</div>
+        <div class="sidebar-item" onclick="switchTab('leaves')">🏖️ Leave Management</div>
+        <div class="sidebar-item" onclick="switchTab('attendance')">📅 Monthly Attendance</div>
+        <div class="sidebar-item" onclick="switchTab('reports')">📈 All Reports & Export</div>
+        <div class="sidebar-item" onclick="switchTab('gps')">📍 Live GPS Tracking</div>
+        <div class="sidebar-item" onclick="switchTab('announcements')">📢 Announcements</div>
+        <div class="sidebar-item" onclick="switchTab('settings')">⚙️ Settings</div>
+        <div class="sidebar-item" onclick="adminLogout()">🚪 Logout</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content active">
+            <h1 class="text-3xl font-bold mb-6">📊 Dashboard Overview</h1>
+            
+            <div class="grid-4 mb-6">
+                <div class="stat-card">
+                    <div class="stat-label">Total Employees</div>
+                    <div class="stat-number" id="totalEmployees">0</div>
+                    <div class="text-xs">Active: <span id="activeEmployees">0</span> | On Hold: <span id="holdEmployees">0</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Present Today</div>
+                    <div class="stat-number" id="presentToday">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Pending Approvals</div>
+                    <div class="stat-number" id="pendingApprovals">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Reports (Month)</div>
+                    <div class="stat-number" id="monthReports">0</div>
+                </div>
+            </div>
+
+            <div class="grid-2 mb-6">
+                <div class="card">
+                    <h3 class="text-xl font-bold mb-4">⚠️ Pending Actions</h3>
+                    <div id="pendingActions"></div>
+                </div>
+                <div class="card">
+                    <h3 class="text-xl font-bold mb-4">📈 Recent Activity</h3>
+                    <div id="recentActivity"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Employee Management Tab -->
+        <div id="employees-tab" class="tab-content">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-3xl font-bold">👥 Employee Management</h1>
+                <button class="btn-primary" onclick="openAddEmployeeModal()">➕ Add Employee</button>
+            </div>
+
+            <div class="card">
+                <div class="grid-3 mb-4">
+                    <input type="text" id="searchEmployee" class="input-field" placeholder="🔍 Search by ID, Name, Mobile..." onkeyup="searchEmployees()">
+                    <select id="filterStatus" class="input-field" onchange="filterEmployees()">
+                        <option value="">All Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Hold">On Hold</option>
+                        <option value="Left">Left</option>
+                    </select>
+                    <select id="filterDesignation" class="input-field" onchange="filterEmployees()">
+                        <option value="">All Designations</option>
+                        <option value="Medical Representative">Medical Representative</option>
+                        <option value="Area Manager">Area Manager</option>
+                        <option value="Regional Manager">Regional Manager</option>
+                    </select>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Emp ID</th>
+                                <th>Name</th>
+                                <th>Designation</th>
+                                <th>Territory</th>
+                                <th>Mobile</th>
+                                <th>Joining Date</th>
+                                <th>Reporting To</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employeeTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hierarchy Setup Tab -->
+        <div id="hierarchy-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">🌳 Organization Hierarchy</h1>
+            
+            <div class="card">
+                <div id="hierarchyView"></div>
+            </div>
+        </div>
+
+        <!-- Customer Approvals Tab -->
+        <div id="customers-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">👨‍⚕️ Customer Approvals</h1>
+            
+            <div class="card">
+                <div class="mb-4">
+                    <label class="font-bold">Approval Rights:</label>
+                    <select id="customerApprovalRights" class="input-field" onchange="saveApprovalRights()">
+                        <option value="HO">HO Only</option>
+                        <option value="Manager">Reporting Manager</option>
+                        <option value="Both">Both (HO & Manager)</option>
+                    </select>
+                </div>
+
+                <h3 class="text-lg font-bold mb-3">Pending Customer Approvals</h3>
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Customer Code</th>
+                                <th>Customer Name</th>
+                                <th>Type</th>
+                                <th>Specialty</th>
+                                <th>Beat/Area</th>
+                                <th>City</th>
+                                <th>Mobile</th>
+                                <th>Added By</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customerApprovalTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mt-6">
+                <h3 class="text-lg font-bold mb-3">All Approved Customers</h3>
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Customer Code</th>
+                                <th>Customer Name</th>
+                                <th>Type</th>
+                                <th>Beat</th>
+                                <th>City</th>
+                                <th>Assigned MR</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approvedCustomerTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tour Plan Approvals Tab -->
+        <div id="tours-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">🗺️ Tour Plan Approvals</h1>
+            
+            <div class="card">
+                <div class="bg-yellow-100 border-l-4 border-yellow-500 p-4 mb-4">
+                    <p class="font-bold">⚠️ Tour Plan Policy:</p>
+                    <p class="text-sm">Employees must submit tour plan by 3rd of every month. After 3rd, reporting will be blocked until submission.</p>
+                </div>
+
+                <h3 class="text-lg font-bold mb-3">Pending Tour Plan Approvals</h3>
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Month</th>
+                                <th>Submitted On</th>
+                                <th>Total Days Planned</th>
+                                <th>Coverage Areas</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tourPlanApprovalTable"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mt-6">
+                <h3 class="text-lg font-bold mb-3">⚠️ Employees with Pending Tour Plans (After 3rd)</h3>
+                <div id="blockedEmployeesList"></div>
+            </div>
+        </div>
+
+        <!-- Expense Approvals Tab -->
+        <div id="expenses-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">💰 Expense Approvals</h1>
+            
+            <div class="grid-4 mb-6">
+                <div class="stat-card">
+                    <div class="stat-label">Pending Approval</div>
+                    <div class="stat-number">₹<span id="pendingExpenseAmount">0</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">This Month</div>
+                    <div class="stat-number">₹<span id="monthExpenseTotal">0</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Approved</div>
+                    <div class="stat-number">₹<span id="approvedExpenseTotal">0</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Rejected</div>
+                    <div class="stat-number">₹<span id="rejectedExpenseTotal">0</span></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="bg-yellow-100 border-l-4 border-yellow-500 p-4 mb-4">
+                    <p class="font-bold">⚠️ Expense Policy:</p>
+                    <p class="text-sm">Employees must submit last month's expenses by 3rd of current month. Late submission will block reporting.</p>
+                </div>
+
+                <div class="mb-4">
+                    <label class="font-bold">Approval Rights:</label>
+                    <select id="expenseApprovalRights" class="input-field">
+                        <option value="HO">HO Only</option>
+                        <option value="Manager">Reporting Manager</option>
+                        <option value="Both">Both (HO & Manager)</option>
+                    </select>
+                </div>
+
+                <h3 class="text-lg font-bold mb-3">Pending Expense Approvals</h3>
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th>Amount</th>
+                                <th>Location</th>
+                                <th>Description</th>
+                                <th>Receipt</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenseApprovalTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leave Management Tab -->
+        <div id="leaves-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">🏖️ Leave Management</h1>
+            
+            <div class="card">
+                <div class="bg-blue-100 border-l-4 border-blue-500 p-4 mb-4">
+                    <p class="font-bold">📋 Leave Policy:</p>
+                    <p class="text-sm">Employees with less than 6 months service are not eligible for paid leave. They will be marked as Absent.</p>
+                </div>
+
+                <h3 class="text-lg font-bold mb-3">Pending Leave Requests</h3>
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Employee</th>
+                                <th>Leave Type</th>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Days</th>
+                                <th>Service Period</th>
+                                <th>Eligible</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaveApprovalTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monthly Attendance Tab -->
+        <div id="attendance-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">📅 Monthly Attendance Report</h1>
+            
+            <div class="card">
+                <div class="grid-3 mb-4">
+                    <select id="attendanceMonth" class="input-field" onchange="loadMonthlyAttendance()">
+                        <option value="">Select Month</option>
+                    </select>
+                    <select id="attendanceEmployee" class="input-field" onchange="loadMonthlyAttendance()">
+                        <option value="">Select Employee</option>
+                        <option value="all">All Employees</option>
+                    </select>
+                    <button class="btn-primary" onclick="downloadAttendance()">📥 Download Excel</button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table id="attendanceTable">
+                        <thead id="attendanceTableHead"></thead>
+                        <tbody id="attendanceTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- All Reports & Export Tab -->
+        <div id="reports-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">📈 All Reports & Export</h1>
+            
+            <div class="card">
+                <div class="grid-3 mb-4">
+                    <input type="date" id="reportStartDate" class="input-field">
+                    <input type="date" id="reportEndDate" class="input-field">
+                    <select id="reportEmployee" class="input-field">
+                        <option value="">Select Employee</option>
+                        <option value="all">All Employees</option>
+                    </select>
+                </div>
+                <div class="flex gap-4 mb-4">
+                    <button class="btn-primary" onclick="loadDetailedReports()">🔍 Load Reports</button>
+                    <button class="btn-success" onclick="downloadReportsExcel()">📥 Download Excel</button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Employee ID</th>
+                                <th>Employee Name</th>
+                                <th>Customer Code</th>
+                                <th>Customer Name</th>
+                                <th>Beat</th>
+                                <th>Visit Time</th>
+                                <th>Product</th>
+                                <th>Order Value</th>
+                                <th>Order Unit</th>
+                                <th>Stockist</th>
+                                <th>Lat/Long</th>
+                                <th>Address</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailedReportsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live GPS Tracking Tab -->
+        <div id="gps-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">📍 Live GPS Tracking</h1>
+            
+            <div class="card">
+                <div class="mb-4">
+                    <button class="btn-primary mr-2" onclick="refreshGPSTracking()">🔄 Refresh Location</button>
+                    <button class="btn-secondary" onclick="showAllEmployeesOnMap()">🗺️ Show All on Map</button>
+                </div>
+
+                <div id="map" class="mb-4"></div>
+
+                <div class="grid-2 mb-4">
+                    <div id="employeeLocationList"></div>
+                    <div id="selectedEmployeeDetails"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Announcements Tab -->
+        <div id="announcements-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">📢 Announcements</h1>
+            
+            <div class="card">
+                <h3 class="text-lg font-bold mb-3">Create New Announcement</h3>
+                <input type="text" id="announcementTitle" class="input-field" placeholder="Announcement Title">
+                <textarea id="announcementMessage" class="input-field" rows="4" placeholder="Message"></textarea>
+                <select id="announcementTarget" class="input-field">
+                    <option value="all">All Employees</option>
+                    <option value="specific">Specific Employee</option>
+                    <option value="designation">By Designation</option>
+                </select>
+                <div id="announcementTargetDetails"></div>
+                <button class="btn-primary mt-4" onclick="sendAnnouncement()">📤 Send Announcement</button>
+            </div>
+
+            <div class="card mt-6">
+                <h3 class="text-lg font-bold mb-3">Announcement History</h3>
+                <div id="announcementHistory"></div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settings-tab" class="tab-content">
+            <h1 class="text-3xl font-bold mb-6">⚙️ System Settings</h1>
+            
+            <div class="card">
+                <h3 class="text-lg font-bold mb-3">General Settings</h3>
+                <label class="block mb-2">Tour Plan Submission Deadline (Day of Month)</label>
+                <input type="number" id="tourPlanDeadline" class="input-field" value="3" min="1" max="15">
+                
+                <label class="block mb-2 mt-4">Expense Submission Deadline (Day of Month)</label>
+                <input type="number" id="expenseDeadline" class="input-field" value="3" min="1" max="15">
+                
+                <label class="block mb-2 mt-4">Paid Leave Eligibility (Months)</label>
+                <input type="number" id="leaveEligibility" class="input-field" value="6" min="1" max="12">
+                
+                <button class="btn-primary mt-4" onclick="saveSettings()">💾 Save Settings</button>
+            </div>
+
+            <div class="card mt-6">
+                <h3 class="text-lg font-bold mb-3">Data Management</h3>
+                <button class="btn-secondary mr-2" onclick="backupData()">💾 Backup All Data</button>
+                <button class="btn-secondary mr-2" onclick="restoreData()">📥 Restore Data</button>
+                <button class="btn-danger" onclick="clearOldData()">🗑️ Clear Old Data (90+ days)</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Add/Edit Employee Modal -->
+    <div id="employeeModal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4" id="employeeModalTitle">Add New Employee</h2>
+            
+            <div class="grid-2">
+                <div>
+                    <input type="text" id="empId" class="input-field" placeholder="Employee ID *">
+                    <input type="text" id="empName" class="input-field" placeholder="Full Name *">
+                    <input type="password" id="empPassword" class="input-field" placeholder="Password *">
+                    <input type="tel" id="empMobile" class="input-field" placeholder="Mobile (10 digits) *">
+                    <input type="email" id="empEmail" class="input-field" placeholder="Email">
+                </div>
+                <div>
+                    <select id="empDesignation" class="input-field">
+                        <option value="">Select Designation *</option>
+                        <option value="Medical Representative">Medical Representative</option>
+                        <option value="Area Manager">Area Manager</option>
+                        <option value="Regional Manager">Regional Manager</option>
+                        <option value="Zonal Manager">Zonal Manager</option>
+                    </select>
+                    <input type="text" id="empTerritory" class="input-field" placeholder="Territory/Area *">
+                    <select id="empReportingTo" class="input-field">
+                        <option value="">Select Reporting Manager *</option>
+                        <option value="admin">Admin (Direct)</option>
+                    </select>
+                    <input type="date" id="empJoiningDate" class="input-field">
+                    <select id="empStatus" class="input-field">
+                        <option value="Active">Active</option>
+                        <option value="Hold">On Hold</option>
+                        <option value="Left">Left</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex gap-4 mt-4">
+                <button class="btn-primary flex-1" onclick="saveEmployee()">💾 Save Employee</button>
+                <button class="btn-secondary flex-1" onclick="closeEmployeeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Customer Details Modal -->
+    <div id="customerDetailsModal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Customer Details</h2>
+            <div id="customerDetailsContent"></div>
+            <button class="btn-secondary mt-4" onclick="closeCustomerDetailsModal()">Close</button>
+        </div>
+    </div>
+
+    <script src="admin-advanced.js"></script>
+</body>
+</html>

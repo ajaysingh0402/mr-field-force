@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MR Field Force - Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4); }
+        .input-field {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .input-field:focus { outline: none; border-color: #667eea; }
+        .logo { text-align: center; margin-bottom: 24px; }
+        .logo-icon { font-size: 64px; margin-bottom: 10px; }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+            max-width: 90%;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .notification.success { background: #10b981; }
+        .notification.error { background: #ef4444; }
+        .notification.info { background: #3b82f6; }
+        .tab-switch {
+            display: flex;
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+        .tab-switch button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .tab-switch button.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="card w-full max-w-md">
+            <div class="logo">
+                <div class="logo-icon">🏥</div>
+                <h1 class="text-3xl font-bold text-gray-800">MR Field Force</h1>
+                <p class="text-gray-600 mt-2">Smart Field Management System</p>
+            </div>
+
+            <div class="tab-switch">
+                <button class="active" onclick="switchLoginTab('mr')">MR Login</button>
+                <button onclick="switchLoginTab('admin')">Admin Login</button>
+            </div>
+
+            <div id="mrLogin">
+                <form onsubmit="loginMR(event)">
+                    <input type="text" id="mrEmployeeId" class="input-field" placeholder="Employee ID" required>
+                    <input type="password" id="mrPassword" class="input-field" placeholder="Password" required>
+                    <input type="tel" id="mrMobile" class="input-field" placeholder="Mobile Number" required pattern="[0-9]{10}">
+                    <div id="locationStatus" class="text-sm text-gray-600 my-2 text-center"></div>
+                    <button type="submit" class="btn-primary mt-4">🚀 Login with GPS</button>
+                </form>
+            </div>
+
+            <div id="adminLogin" style="display: none;">
+                <form onsubmit="loginAdmin(event)">
+                    <input type="text" id="adminUsername" class="input-field" placeholder="Admin Username" required>
+                    <input type="password" id="adminPassword" class="input-field" placeholder="Admin Password" required>
+                    <button type="submit" class="btn-primary mt-4">🔐 Login as Admin</button>
+                </form>
+            </div>
+
+            <div class="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+                <p class="text-sm text-blue-800">
+                    <strong>📍 GPS Login:</strong><br>
+                    Your location will be captured for attendance tracking
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1wTed_N96_C-jeDR9Q-fyMt4PZ0dB8q6XEIjHg951s2s/edit?usp=sharing';
+        const SHEET_ID = '1wTed_N96_C-jeDR9Q-fyMt4PZ0dB8q6XEIjHg951s2s';
+
+        function switchLoginTab(type) {
+            const mrLogin = document.getElementById('mrLogin');
+            const adminLogin = document.getElementById('adminLogin');
+            const buttons = document.querySelectorAll('.tab-switch button');
+            
+            if (type === 'mr') {
+                mrLogin.style.display = 'block';
+                adminLogin.style.display = 'none';
+                buttons[0].classList.add('active');
+                buttons[1].classList.remove('active');
+            } else {
+                mrLogin.style.display = 'none';
+                adminLogin.style.display = 'block';
+                buttons[0].classList.remove('active');
+                buttons[1].classList.add('active');
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        function getLocation() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    reject('Geolocation not supported');
+                    return;
+                }
+                
+                document.getElementById('locationStatus').innerHTML = '📍 Getting location...';
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const location = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy,
+                            timestamp: new Date().toISOString()
+                        };
+                        document.getElementById('locationStatus').innerHTML = '✅ Location captured';
+                        resolve(location);
+                    },
+                    (error) => {
+                        document.getElementById('locationStatus').innerHTML = '❌ Location access denied';
+                        reject(error);
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+            });
+        }
+
+        async function loginMR(event) {
+            event.preventDefault();
+            
+            const employeeId = document.getElementById('mrEmployeeId').value;
+            const password = document.getElementById('mrPassword').value;
+            const mobile = document.getElementById('mrMobile').value;
+            
+            try {
+                showNotification('Getting your location...', 'info');
+                const location = await getLocation();
+                
+                const employees = JSON.parse(localStorage.getItem('employees') || '[]');
+                const employee = employees.find(emp => 
+                    emp.employeeId === employeeId && 
+                    emp.password === password && 
+                    emp.mobile === mobile &&
+                    emp.status === 'Active'
+                );
+                
+                if (employee) {
+                    const loginData = {
+                        ...employee,
+                        loginLocation: location,
+                        loginTime: new Date().toISOString()
+                    };
+                    
+                    sessionStorage.setItem('currentUser', JSON.stringify(loginData));
+                    sessionStorage.setItem('userType', 'mr');
+                    
+                    // Save login record
+                    let loginRecords = JSON.parse(localStorage.getItem('loginRecords') || '[]');
+                    loginRecords.push({
+                        employeeId: employeeId,
+                        name: employee.name,
+                        loginTime: new Date().toISOString(),
+                        location: location,
+                        type: 'login'
+                    });
+                    localStorage.setItem('loginRecords', JSON.stringify(loginRecords));
+                    
+                    showNotification('✅ Login successful! Welcome ' + employee.name);
+                    setTimeout(() => window.location.href = 'mr-app.html', 1000);
+                } else {
+                    showNotification('❌ Invalid credentials!', 'error');
+                }
+            } catch (error) {
+                showNotification('⚠️ Please enable location access for login', 'error');
+            }
+        }
+
+        async function loginAdmin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('adminUsername').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            const admins = JSON.parse(localStorage.getItem('admins') || '[{"username":"admin","password":"admin123","name":"Super Admin","role":"Super Admin"}]');
+            const admin = admins.find(adm => adm.username === username && adm.password === password);
+            
+            if (admin) {
+                sessionStorage.setItem('currentUser', JSON.stringify(admin));
+                sessionStorage.setItem('userType', 'admin');
+                showNotification('✅ Admin login successful!');
+                setTimeout(() => window.location.href = 'admin-panel.html', 1000);
+            } else {
+                showNotification('❌ Invalid admin credentials!', 'error');
+            }
+        }
+
+        // Initialize
+        if (!localStorage.getItem('admins')) {
+            localStorage.setItem('admins', JSON.stringify([
+                { username: 'admin', password: 'admin123', name: 'Super Admin', role: 'Super Admin', email: 'admin@company.com', mobile: '9999999999' }
+            ]));
+        }
+
+        if (!localStorage.getItem('employees')) {
+            localStorage.setItem('employees', JSON.stringify([
+                { employeeId: 'MR001', password: '123456', name: 'Rahul Kumar', mobile: '9876543210', email: 'rahul@company.com', designation: 'Medical Representative', territory: 'Delhi NCR', reportingTo: 'admin', status: 'Active', joiningDate: '2024-01-01' }
+            ]));
+        }
+    </script>
+</body>
+</html>
